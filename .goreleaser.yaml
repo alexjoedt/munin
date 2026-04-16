@@ -1,0 +1,70 @@
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - env:
+      - CGO_ENABLED=0
+    main: cmd/server/main.go
+    ldflags:
+      - "-X buildinfo.version={{.Version}} -X buildinfo.build={{.Commit}} -X buildinfo.date={{.Date}}"
+
+    goos:
+      - linux
+      - windows
+      - darwin
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+    - goos: windows
+      format: zip
+dockers:
+  - image_templates:
+      - "ghcr.io/alexjoedt/munin:{{ .Tag }}"
+      - "ghcr.io/alexjoedt/munin:v{{ .Major }}"
+      - "ghcr.io/alexjoedt/munin:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/alexjoedt/munin"
+      - "--build-arg=VERSION={{.Version}}"
+      - "--build-arg=COMMIT={{.Commit}}"
+      - "--build-arg=DATE={{.Date}}"
+
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: alexjoedt
+    name: munin
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} {{.Tag}}"
+  header: |
+    ## What's Changed
+    
+    This release includes the following changes:
+  footer: |
+    
+    **Full Changelog**: https://github.com/alexjoedt/munin/compare/{{ .PreviousTag }}...{{ .Tag }}
