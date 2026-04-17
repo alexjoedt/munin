@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package munin;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/alexjoedt/munin/proto";
+
+// Message represents a CloudEvent as defined by the CloudEvents spec v1.0.2.
+// See: https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md
+message Message {
+  // REQUIRED: Identifies the event. source + id must be unique per distinct event.
+  string id = 1;
+
+  // REQUIRED: Identifies the context in which the event happened (URI-reference).
+  string source = 2;
+
+  // REQUIRED: The version of the CloudEvents specification used. Must be "1.0".
+  string specversion = 3;
+
+  // REQUIRED: Describes the type of event related to the originating occurrence.
+  string type = 4;
+
+  // OPTIONAL: Content type of the data value (RFC 2046 media type).
+  optional string datacontenttype = 5;
+
+  // OPTIONAL: URI identifying the schema that data adheres to.
+  optional string dataschema = 6;
+
+  // OPTIONAL: Describes the subject of the event in the context of the event producer.
+  optional string subject = 7;
+
+  // OPTIONAL: Timestamp of when the occurrence happened (RFC 3339).
+  optional google.protobuf.Timestamp time = 8;
+
+  // OPTIONAL: Domain-specific event payload.
+  optional bytes data = 9;
+
+  // OPTIONAL: Extension attributes – additional context metadata keyed by attribute name.
+  map<string, string> extensions = 10;
+}
+
+// PublishResponse is returned after a message is successfully published.
+message PublishResponse {
+  string id = 1;
+}
+
+// SubscribeRequest is sent by the client to subscribe to a stream of messages.
+message SubscribeRequest {
+  // Optional filter on the CloudEvent type attribute.
+  string type_filter = 1;
+  // Optional filter on the CloudEvent source attribute.
+  string source_filter = 2;
+}
+
+// MessageService provides publish and subscribe streaming capabilities.
+service MessageService {
+  // Publish streams messages from the client to the server.
+  rpc Publish(stream Message) returns (PublishResponse);
+
+  // Subscribe streams messages from the server to the client.
+  rpc Subscribe(SubscribeRequest) returns (stream Message);
+}
