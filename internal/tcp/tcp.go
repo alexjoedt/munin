@@ -4,24 +4,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/xid"
 )
 
+const (
+	shutdownTimeout = 1 * time.Minute
+)
+
 type Server struct {
 	listener net.Listener
+	logger   *slog.Logger
+
+	cancelFunc context.CancelFunc
 
 	wg    sync.WaitGroup
 	mu    sync.RWMutex
 	peers map[xid.ID]*Peer
 }
 
-func NewServer() *Server {
+func NewServer(logger *slog.Logger) *Server {
 	return &Server{
-		peers: make(map[xid.ID]*Peer),
+		logger: logger,
+		peers:  make(map[xid.ID]*Peer),
 	}
 }
 
@@ -30,25 +40,28 @@ func NewServer() *Server {
 // each one to handler in its own goroutine.
 //
 // ListenAndServe always returns a non-nil error.
-func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
+func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
+	srvCtx, cancel := context.WithCancel(ctx)
+	srv.cancelFunc = cancel
+
 	network := networkFromAddr(addr)
 
 	listener, err := net.Listen(network, addr)
 	if err != nil {
 		return fmt.Errorf("listen and serve: %w", err)
 	}
-	s.listener = listener
+	srv.listener = listener
 
-	return s.serve(ctx, listener)
+	return srv.serve(srvCtx, listener)
 }
 
 // serve accepts connections from l and dispatches each one to handler in
 // its own goroutine. The listener is closed before serve returns.
-func (s *Server) serve(ctx context.Context, l net.Listener) error {
-
+func (srv *Server) serve(ctx context.Context, l net.Listener) error {
 	// Stop accepting new connections when context is done
 	go func() {
 		<-ctx.Done()
+		srv.logger.Info("server context canceled")
 		_ = l.Close()
 	}()
 
@@ -56,33 +69,68 @@ func (s *Server) serve(ctx context.Context, l net.Listener) error {
 		conn, err := l.Accept()
 		if err != nil {
 			switch {
-			case errors.Is(err, context.Canceled):
+			case errors.Is(err, net.ErrClosed):
 				return nil
 			default:
-				return fmt.Errorf("accept connection: %w", err)
+				srv.logger.ErrorContext(ctx, "accept connection", "error", err)
+				continue
+				// return fmt.Errorf("accept connection: %w", err)
 			}
 		}
 
-		fmt.Println("accpeted new connection")
-
 		peerCtx, cancel := context.WithCancel(ctx)
-		peer := &Peer{id: xid.New(), conn: conn, cancelFunc: cancel}
+		peer := newPeer(conn, cancel, srv.logger)
 
-		s.mu.Lock()
-		s.peers[peer.id] = peer
-		s.mu.Unlock()
+		srv.mu.Lock()
+		srv.peers[peer.id] = peer
+		srv.mu.Unlock()
 
-		s.wg.Go(func() {
-			defer cancel()
-			fmt.Println("Starting peer handler", peer.id)
-			if err := peer.Serve(peerCtx); err != nil {
-				if !errors.Is(err, ErrPeerClosed) {
-					fmt.Printf("peer serve: %v\n", err)
+		srv.wg.Go(func() {
+			defer func() {
+				cancel()
+				srv.mu.Lock()
+				delete(srv.peers, peer.id)
+				srv.mu.Unlock()
+			}()
+			if serveErr := peer.Serve(peerCtx); serveErr != nil {
+				if !errors.Is(serveErr, ErrPeerClosed) {
+					srv.logger.ErrorContext(peerCtx, "peer serve error", "error", serveErr)
 				}
-			} else {
-				fmt.Printf("peer '%s' closed gracefully\n", peer.id)
 			}
 		})
+	}
+}
+
+func (srv *Server) Shutdown(ctx context.Context) error {
+	srv.logger.Info("shutdown server")
+	// Do not close the underlying listener here
+	if srv.cancelFunc != nil {
+		srv.cancelFunc() // Stops the listener and prevents accepting new connections
+	}
+
+	done := make(chan struct{})
+	go func() {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		for _, p := range srv.peers {
+			srv.logger.Info("closing peer", "id", p.id)
+			p.cancelFunc() // closing all peer
+		}
+	}()
+
+	go func() {
+		srv.wg.Wait()
+		srv.logger.Info("all peer are done")
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("shutdown server: %w", ctx.Err())
+	case <-done:
+		return nil
+	case <-time.After(shutdownTimeout):
+		return fmt.Errorf("timeout")
 	}
 }
 
