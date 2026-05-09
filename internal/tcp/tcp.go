@@ -8,13 +8,8 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/rs/xid"
-)
-
-const (
-	shutdownTimeout = 1 * time.Minute
 )
 
 var (
@@ -106,8 +101,6 @@ func (srv *Server) serve(ctx context.Context, l net.Listener) error {
 }
 
 func (srv *Server) Shutdown(ctx context.Context) error {
-	srv.logger.Info("shutdown server")
-
 	// stop accepting new connections
 	srv.closeListener()
 
@@ -120,7 +113,6 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() {
 		srv.wg.Wait() // wait for peers to close
-		srv.logger.Info("all peer are done")
 		close(done)
 	}()
 
