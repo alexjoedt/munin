@@ -56,6 +56,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	stop := context.AfterFunc(ctx, srv.closeListener)
 	defer stop()
 
+	srv.logger.Info("Starting server", "network", network, "address", addr)
 	return srv.serve(ctx, listener)
 }
 
@@ -73,7 +74,6 @@ func (srv *Server) serve(ctx context.Context, l net.Listener) error {
 			default:
 				srv.logger.ErrorContext(ctx, "accept connection", "error", err)
 				continue
-				// return fmt.Errorf("accept connection: %w", err)
 			}
 		}
 
@@ -93,10 +93,11 @@ func (srv *Server) serve(ctx context.Context, l net.Listener) error {
 			}()
 			if serveErr := peer.Serve(peerCtx); serveErr != nil {
 				if !errors.Is(serveErr, ErrPeerClosed) {
-					srv.logger.ErrorContext(peerCtx, "peer serve error", "error", serveErr)
+					srv.logger.Error("handle peer", "error", serveErr)
 				}
 			}
 		})
+
 	}
 }
 

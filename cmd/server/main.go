@@ -10,18 +10,28 @@ import (
 	"time"
 
 	"github.com/alexjoedt/munin/internal/tcp"
+
+	"github.com/alexjoedt/log"
+)
+
+const (
+	shutdownTimeout = 10 * time.Second
 )
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "exited with an error: %w\n", err)
+		fmt.Fprintf(os.Stderr, "exited with an error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{}))
-	logger.Info("Starting Munin server...")
+	handler := log.NewSlogHandler(
+		log.WithFormat(log.FormatConsole),
+		log.WithWriter(os.Stderr),
+	)
+
+	logger := slog.New(handler)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT)
 	defer cancel()
@@ -31,7 +41,7 @@ func run() error {
 	go func() {
 		<-ctx.Done()
 		cancel()
-		shutDownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+		shutDownCtx, cancelShutdown := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancelShutdown()
 		errC <- srv.Shutdown(shutDownCtx)
 	}()
