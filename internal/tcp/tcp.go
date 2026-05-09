@@ -17,11 +17,17 @@ const (
 	shutdownTimeout = 1 * time.Minute
 )
 
-type Server struct {
-	listener net.Listener
-	logger   *slog.Logger
+var (
+	ErrShutdownTimeout = errors.New("timeout while shutdown server")
+)
 
-	cancelFunc context.CancelFunc
+type Server struct {
+	logger *slog.Logger
+
+	listener net.Listener
+
+	closeOnce      sync.Once
+	listenerClosed chan struct{}
 
 	wg    sync.WaitGroup
 	mu    sync.RWMutex
@@ -41,8 +47,6 @@ func NewServer(logger *slog.Logger) *Server {
 //
 // ListenAndServe always returns a non-nil error.
 func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
-	srvCtx, cancel := context.WithCancel(ctx)
-	srv.cancelFunc = cancel
 
 	network := networkFromAddr(addr)
 
@@ -50,20 +54,20 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	if err != nil {
 		return fmt.Errorf("listen and serve: %w", err)
 	}
-	srv.listener = listener
 
-	return srv.serve(srvCtx, listener)
+	srv.listener = listener
+	srv.listenerClosed = make(chan struct{})
+
+	stop := context.AfterFunc(ctx, srv.closeListener)
+	defer stop()
+
+	return srv.serve(ctx, listener)
 }
 
 // serve accepts connections from l and dispatches each one to handler in
 // its own goroutine. The listener is closed before serve returns.
 func (srv *Server) serve(ctx context.Context, l net.Listener) error {
-	// Stop accepting new connections when context is done
-	go func() {
-		<-ctx.Done()
-		srv.logger.Info("server context canceled")
-		_ = l.Close()
-	}()
+	defer close(srv.listenerClosed)
 
 	for {
 		conn, err := l.Accept()
@@ -103,23 +107,19 @@ func (srv *Server) serve(ctx context.Context, l net.Listener) error {
 
 func (srv *Server) Shutdown(ctx context.Context) error {
 	srv.logger.Info("shutdown server")
-	// Do not close the underlying listener here
-	if srv.cancelFunc != nil {
-		srv.cancelFunc() // Stops the listener and prevents accepting new connections
+
+	// stop accepting new connections
+	srv.closeListener()
+
+	select {
+	case <-srv.listenerClosed:
+	case <-ctx.Done():
+		return fmt.Errorf("shutdown server: %w", ctx.Err())
 	}
 
 	done := make(chan struct{})
 	go func() {
-		srv.mu.Lock()
-		defer srv.mu.Unlock()
-		for _, p := range srv.peers {
-			srv.logger.Info("closing peer", "id", p.id)
-			p.cancelFunc() // closing all peer
-		}
-	}()
-
-	go func() {
-		srv.wg.Wait()
+		srv.wg.Wait() // wait for peers to close
 		srv.logger.Info("all peer are done")
 		close(done)
 	}()
@@ -129,9 +129,15 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 		return fmt.Errorf("shutdown server: %w", ctx.Err())
 	case <-done:
 		return nil
-	case <-time.After(shutdownTimeout):
-		return fmt.Errorf("timeout")
 	}
+}
+
+func (srv *Server) closeListener() {
+	srv.closeOnce.Do(func() {
+		if srv.listener != nil {
+			_ = srv.listener.Close()
+		}
+	})
 }
 
 // networkFromAddr returns "unix" when addr looks like a file-system path
