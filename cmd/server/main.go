@@ -33,7 +33,7 @@ func run() error {
 
 	logger := slog.New(handler)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	srv := tcp.NewServer(logger)
