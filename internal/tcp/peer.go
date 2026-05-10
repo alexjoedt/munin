@@ -77,6 +77,8 @@ func (peer *Peer) Serve(ctx context.Context) error {
 			peer.logger.InfoContext(pCtx, "peer requested close")
 			return nil
 		}
+
+		peer.conn.Write([]byte(line + "\n"))
 	}
 }
 
