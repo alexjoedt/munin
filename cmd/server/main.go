@@ -46,7 +46,7 @@ func run() error {
 		errC <- srv.Shutdown(shutDownCtx)
 	}()
 
-	err := srv.ListenAndServe(context.Background(), ":8080")
+	err := srv.ListenAndServe(ctx, ":8080")
 	if err != nil {
 		return fmt.Errorf("listen and serve: %w", err)
 	}
