@@ -19,34 +19,34 @@ func TestEventUnmarshalBinary(t *testing.T) {
 	tests := []struct {
 		name        string
 		binaryEvent []byte
-		want        *Event
+		want        *PublishEvent
 		wantErr     bool
 	}{
 		{
 			name:        "event with topic and data",
 			binaryEvent: eventBinary(fixedID, "users.created", []byte(`{"email": "test@munin.com"}`)),
-			want:        &Event{ID: fixedID, Topic: "users.created", Data: []byte(`{"email": "test@munin.com"}`)},
+			want:        &PublishEvent{ID: fixedID, Topic: "users.created", Data: []byte(`{"email": "test@munin.com"}`)},
 		},
 		{
 			name:        "event with empty topic and empty data",
 			binaryEvent: eventBinary(anotherID, "", []byte{}),
-			want:        &Event{ID: anotherID, Topic: "", Data: []byte{}},
+			want:        &PublishEvent{ID: anotherID, Topic: "", Data: []byte{}},
 		},
 		{
 			name:        "event with topic and empty data",
 			binaryEvent: eventBinary(anotherID, "users.updated", []byte{}),
-			want:        &Event{ID: anotherID, Topic: "users.updated", Data: []byte{}},
+			want:        &PublishEvent{ID: anotherID, Topic: "users.updated", Data: []byte{}},
 		},
 		{
 			name:        "event with empty topic and data",
 			binaryEvent: eventBinary(anotherID, "", []byte(`{"ok":true}`)),
-			want:        &Event{ID: anotherID, Topic: "", Data: []byte(`{"ok":true}`)},
+			want:        &PublishEvent{ID: anotherID, Topic: "", Data: []byte(`{"ok":true}`)},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := &Event{}
+			event := &PublishEvent{}
 			err := event.UnmarshalWire(tt.binaryEvent)
 			if tt.wantErr {
 				if err == nil {
@@ -71,14 +71,14 @@ func TestEventMarshalBinary(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		event   *Event
+		event   *PublishEvent
 		want    []byte
 		wantErr bool
 		errIs   error
 	}{
 		{
 			name: "marshal event with topic and data",
-			event: &Event{
+			event: &PublishEvent{
 				ID:    fixedID,
 				Topic: "orders.created",
 				Data:  []byte(`{"order_id":42}`),
@@ -87,7 +87,7 @@ func TestEventMarshalBinary(t *testing.T) {
 		},
 		{
 			name: "marshal event with empty topic and empty data",
-			event: &Event{
+			event: &PublishEvent{
 				ID:    fixedID,
 				Topic: "",
 				Data:  []byte{},
@@ -96,7 +96,7 @@ func TestEventMarshalBinary(t *testing.T) {
 		},
 		{
 			name: "topic exceeding max uint16 returns error",
-			event: &Event{
+			event: &PublishEvent{
 				ID:    fixedID,
 				Topic: strings.Repeat("a", int(math.MaxUint16)+1),
 				Data:  []byte(`{"ok":true}`),
@@ -138,11 +138,11 @@ func TestEventMarshalBinary_WireSegments(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		event *Event
+		event *PublishEvent
 	}{
 		{
 			name: "non-empty topic and data",
-			event: &Event{
+			event: &PublishEvent{
 				ID:    fixedID,
 				Topic: "invoice.paid",
 				Data:  []byte(`{"invoice_id":"inv-1","paid":true}`),
@@ -150,7 +150,7 @@ func TestEventMarshalBinary_WireSegments(t *testing.T) {
 		},
 		{
 			name: "empty topic and data",
-			event: &Event{
+			event: &PublishEvent{
 				ID:    fixedID,
 				Topic: "",
 				Data:  []byte{},
