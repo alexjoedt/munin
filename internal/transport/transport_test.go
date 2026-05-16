@@ -1,58 +1,105 @@
 package transport
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
-func TestSplitAddress(t *testing.T) {
-	type netAddr struct {
-		network string
-		address string
+func TestParseAddr(t *testing.T) {
+	relUnixPath := "./testdata/socket.sock"
+	absUnixPath, err := filepath.Abs(relUnixPath)
+	if err != nil {
+		t.Fatalf("filepath.Abs(%q): %v", relUnixPath, err)
 	}
 
 	tests := []struct {
-		name     string
-		addr     string
-		expected netAddr
-		wantErr  bool
+		name    string
+		input   string
+		want    *Addr
+		wantErr bool
 	}{
 		{
-			name:     "tcp network without protocol",
-			addr:     "127.0.0.1:8080",
-			expected: netAddr{network: "tcp", address: "127.0.0.1:8080"},
+			name:  "tcp address without scheme",
+			input: "127.0.0.1:8080",
+			want: &Addr{
+				Network: "tcp",
+				Host:    "127.0.0.1",
+				Port:    8080,
+			},
 		},
 		{
-			name:     "tcp network with protocol",
-			addr:     "tcp://127.0.0.1:8080",
-			expected: netAddr{network: "tcp", address: "127.0.0.1:8080"},
+			name:  "tcp address with scheme",
+			input: "tcp://127.0.0.1:8080",
+			want: &Addr{
+				Network: "tcp",
+				Host:    "127.0.0.1",
+				Port:    8080,
+			},
 		},
 		{
-			name:     "unix socket without protocol",
-			addr:     "/path/to/socket.sock",
-			expected: netAddr{network: "unix", address: "/path/to/socket.sock"},
+			name:  "unix address absolute path",
+			input: "/tmp/munin.sock",
+			want: &Addr{
+				Network: "unix",
+				Path:    "/tmp/munin.sock",
+			},
 		},
 		{
-			name:     "unix socket without protocol",
-			addr:     "unix:///path/to/socket.sock",
-			expected: netAddr{network: "unix", address: "/path/to/socket.sock"},
+			name:  "unix address with scheme and relative path",
+			input: "unix://" + relUnixPath,
+			want: &Addr{
+				Network: "unix",
+				Path:    absUnixPath,
+			},
+		},
+		{
+			name:    "unsupported scheme",
+			input:   "udp://127.0.0.1:8080",
+			wantErr: true,
+		},
+		{
+			name:    "tcp with invalid port",
+			input:   "tcp://127.0.0.1:not-a-number",
+			wantErr: true,
+		},
+		{
+			name:    "tcp with port too large",
+			input:   "tcp://127.0.0.1:65536",
+			wantErr: true,
+		},
+		{
+			name:    "tcp missing port",
+			input:   "tcp://127.0.0.1",
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotNet, gotAddr, err := SplitAddr(tt.addr)
+			got, err := ParseAddr(tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("got error = nil; want non-nil error")
 				}
+				return
 			}
 
-			if gotNet != tt.expected.network {
-				t.Fatalf("got %s; want %s\n", gotNet, tt.expected.network)
+			if err != nil {
+				t.Fatalf("ParseAddr(%q) returned error: %v", tt.input, err)
 			}
 
-			if gotAddr != tt.expected.address {
-				t.Fatalf("got %s; want %s\n", gotAddr, tt.expected.address)
+			if got.Network != tt.want.Network {
+				t.Fatalf("Network = %q, want %q", got.Network, tt.want.Network)
+			}
+			if got.Host != tt.want.Host {
+				t.Fatalf("Host = %q, want %q", got.Host, tt.want.Host)
+			}
+			if got.Port != tt.want.Port {
+				t.Fatalf("Port = %d, want %d", got.Port, tt.want.Port)
+			}
+			if got.Path != tt.want.Path {
+				t.Fatalf("Path = %q, want %q", got.Path, tt.want.Path)
 			}
 		})
 	}
-
 }

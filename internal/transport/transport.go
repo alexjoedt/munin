@@ -191,7 +191,7 @@ func ParseAddr(addr string) (*Addr, error) {
 			return nil, fmt.Errorf("invalid port in adress '%s': %w", addr, err)
 		}
 		if p > math.MaxUint16 {
-			return nil, fmt.Errorf("port number exceeds limit: %d", port)
+			return nil, fmt.Errorf("port number exceeds limit: %d", p)
 		}
 		address.Port = uint16(p)
 		return &address, nil
