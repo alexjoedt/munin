@@ -70,7 +70,10 @@ func (msg *Message) UnmarshalWire(b []byte) error {
 	offset++
 
 	msg.Type = b[offset]
+	offset++
 	msg.Length = binary.BigEndian.Uint32(b[offset : offset+4])
+	offset += 4
+
 	msg.Payload = b[offset : offset+int(msg.Length)]
 
 	return nil

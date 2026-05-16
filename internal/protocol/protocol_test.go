@@ -56,3 +56,49 @@ func TestMessageMarshalWire(t *testing.T) {
 		})
 	}
 }
+
+func TestMessageUnmarshalWire(t *testing.T) {
+	tests := []struct {
+		name    string
+		msgType Type
+		payload []byte
+	}{
+		{"handshake", TypeHandshake, []byte(`{"message":"hello munin"}`)},
+		{"heartbeat", TypeHeartbeat, []byte{}},
+		{"publish", TypePublish, []byte(`{"topic":"t","data":"x"}`)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wire, err := NewMessage(tt.msgType, tt.payload).MarshalWire()
+			if err != nil {
+				t.Fatalf("marshal failed: %v", err)
+			}
+
+			var got Message
+			if err := got.UnmarshalWire(wire); err != nil {
+				t.Fatalf("unmarshal failed: %v", err)
+			}
+
+			if got.MagicByte != magicByte {
+				t.Errorf("magic byte: expected %d, got %d", magicByte, got.MagicByte)
+			}
+
+			if got.Version != version {
+				t.Errorf("version: expected %d, got %d", version, got.Version)
+			}
+
+			if got.Type != uint8(tt.msgType) {
+				t.Errorf("type: expected %d, got %d", tt.msgType, got.Type)
+			}
+
+			if got.Length != uint32(len(tt.payload)) {
+				t.Errorf("length: expected %d, got %d", len(tt.payload), got.Length)
+			}
+
+			if !bytes.Equal(got.Payload, tt.payload) {
+				t.Errorf("payload: expected %s, got %s", tt.payload, got.Payload)
+			}
+		})
+	}
+}
