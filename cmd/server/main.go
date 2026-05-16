@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alexjoedt/munin/internal/tcp"
+	"github.com/alexjoedt/munin/internal/transport"
 
 	"github.com/alexjoedt/log"
 )
@@ -36,7 +36,7 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	srv := tcp.NewServer(logger)
+	srv := transport.NewServer(logger)
 	errC := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
