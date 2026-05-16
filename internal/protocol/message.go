@@ -7,6 +7,9 @@ import (
 	"math"
 )
 
+// Message is the message that represents the wire format, it acts as envelope to transport the message type payload.
+//
+//	| MagicByte (4B) | Version (1B) | Type (1B) | Length (4B) | Payload (N) |
 type Message struct {
 	MagicByte uint32 // 4 Byte
 	Version   uint8  // 1 Byte
