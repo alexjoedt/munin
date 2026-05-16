@@ -30,6 +30,8 @@ func Dial(ctx context.Context, addr string) (*Conn, error) {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
 
+	// TODO: Handshake
+
 	return &Conn{
 		addr: address,
 		conn: c,
