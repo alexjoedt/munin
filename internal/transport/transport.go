@@ -166,6 +166,16 @@ func (addr *Addr) String() string {
 	return ""
 }
 
+func (addr *Addr) Address() string {
+	switch addr.Network {
+	case "unix":
+		return addr.Path
+	case "tcp":
+		return fmt.Sprintf("%s:%d", addr.Host, addr.Port)
+	}
+	return ""
+}
+
 func ParseAddr(addr string) (*Addr, error) {
 	var address Addr
 	switch {
