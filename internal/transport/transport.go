@@ -5,7 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
+	"net/url"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -42,10 +46,19 @@ func NewServer(logger *slog.Logger) *Server {
 //
 // ListenAndServe always returns a non-nil error.
 func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
+	address, err := ParseAddr(addr)
+	if err != nil {
+		return fmt.Errorf("address: %w", err)
+	}
 
-	network := NetworkFromAddr(addr)
+	switch address.Network {
+	case "unix":
+		addr = address.Path
+	case "tcp":
+		addr = fmt.Sprintf("%s:%d", address.Host, address.Port)
+	}
 
-	listener, err := net.Listen(network, addr)
+	listener, err := net.Listen(address.Network, addr)
 	if err != nil {
 		return fmt.Errorf("listen and serve: %w", err)
 	}
@@ -56,7 +69,7 @@ func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 	stop := context.AfterFunc(ctx, srv.closeListener)
 	defer stop()
 
-	srv.logger.Info("Starting server", "network", network, "address", addr)
+	srv.logger.Info("Starting server", "address", address.String())
 	return srv.serve(ctx, listener)
 }
 
@@ -133,25 +146,71 @@ func (srv *Server) closeListener() {
 	})
 }
 
-// NetworkFromAddr returns "unix" when addr looks like a file-system path
-// (starts with "/" or "./"), and "tcp" otherwise.
-func NetworkFromAddr(addr string) string {
-	if strings.HasPrefix(addr, "/") ||
-		strings.HasPrefix(addr, "./") || strings.HasPrefix(addr, "unix") {
-		return "unix"
-	}
-	return "tcp"
+type Addr struct {
+	Network string
+
+	Host string
+	Port uint16
+
+	// Path is the path to the unix domain socket
+	Path string
 }
 
-// SplitAddr splits address into network and host:port or path for unix
-func SplitAddr(addr string) (string, string, error) {
-	network := NetworkFromAddr(addr)
-
-	switch network {
+func (addr *Addr) String() string {
+	switch addr.Network {
 	case "unix":
-		return network, strings.TrimPrefix(addr, "unix://"), nil
+		return fmt.Sprintf("%s:://%s", addr.Network, addr.Path)
 	case "tcp":
-		return network, strings.TrimPrefix(addr, "tcp://"), nil
+		return fmt.Sprintf("%s:://%s:%d", addr.Network, addr.Host, addr.Port)
 	}
-	return "", "", fmt.Errorf("unsupported network: '%s'", network)
+	return ""
+}
+
+func ParseAddr(addr string) (*Addr, error) {
+	var address Addr
+	switch {
+	case isUnix(addr):
+		address.Network = "unix"
+		var err error
+		path := strings.TrimPrefix(addr, "unix://")
+		path, err = filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("invalid path '%s': %w", path, err)
+		}
+		address.Path = path
+		return &address, nil
+	case isTCP(addr):
+		address.Network = "tcp"
+		host, port, err := net.SplitHostPort(strings.TrimPrefix(addr, "tcp://"))
+		if err != nil {
+			return nil, fmt.Errorf("parsing tcp address: %s: %w", addr, err)
+		}
+		address.Host = host
+		p, err := strconv.Atoi(port)
+		if err != nil {
+			return nil, fmt.Errorf("invalid port in adress '%s': %w", addr, err)
+		}
+		if p > math.MaxUint16 {
+			return nil, fmt.Errorf("port number exceeds limit: %d", port)
+		}
+		address.Port = uint16(p)
+		return &address, nil
+	default:
+		return nil, fmt.Errorf("unsupported adress: '%s'", addr)
+	}
+}
+
+func isUnix(addr string) bool {
+	return strings.HasPrefix(addr, "/") ||
+		strings.HasPrefix(addr, "./") ||
+		strings.HasPrefix(addr, "unix")
+}
+
+func isTCP(addr string) bool {
+	u, err := url.Parse(addr)
+	if err == nil && u.Scheme == "tcp" {
+		return true
+	}
+	_, _, err = net.SplitHostPort(addr)
+	return err == nil
 }
