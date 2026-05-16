@@ -15,7 +15,7 @@ type Marshaller interface {
 }
 
 type Unmarshaller interface {
-	UnmarshalWire([]byte) (*Event, error)
+	UnmarshalWire([]byte) error
 }
 
 type Message struct {
@@ -59,4 +59,19 @@ func (msg *Message) MarshalWire() ([]byte, error) {
 	copy(buf[10:], msg.Payload)
 
 	return buf, nil
+}
+
+func (msg *Message) UnmarshalWire(b []byte) error {
+	offset := 0
+	msg.MagicByte = binary.LittleEndian.Uint32(b[offset : offset+4])
+	offset += 4
+
+	msg.Version = b[offset]
+	offset++
+
+	msg.Type = b[offset]
+	msg.Length = binary.BigEndian.Uint32(b[offset : offset+4])
+	msg.Payload = b[offset : offset+int(msg.Length)]
+
+	return nil
 }
