@@ -32,8 +32,8 @@ func NewEvent(topic string, data []byte) *Event {
 	}
 }
 
-// MarshalBinary marshals [Event] into a binary format.
-func (e *Event) MarshalBinary() ([]byte, error) {
+// MarshalWire marshals [Event] into a binary format.
+func (e *Event) MarshalWire() ([]byte, error) {
 	topic := []byte(e.Topic)
 	if len(topic) > math.MaxUint16 {
 		return nil, fmt.Errorf("event: %w", ErrTopicExceedsMaxLength)
@@ -75,7 +75,7 @@ func (e *Event) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-func (e *Event) UnmarshalBinary(b []byte) error {
+func (e *Event) UnmarshalWire(b []byte) error {
 	offset := 0
 
 	// Read ID

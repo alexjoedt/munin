@@ -1,12 +1,22 @@
 package protocol
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 const (
 	headerLength = 10
 	magicByte    = 0x0539
 	version      = 1
 )
+
+type Marshaller interface {
+	MarshalWire() ([]byte, error)
+}
+
+type Unmarshaller interface {
+	UnmarshalWire([]byte) (*Event, error)
+}
 
 type Message struct {
 	MagicByte uint32 // 4 Byte
@@ -27,7 +37,7 @@ const (
 	TypeAck
 )
 
-// NewMessage is a helper for a munin message
+// NewMessage is a helper for a munin message.
 func NewMessage(t Type, payload []byte) *Message {
 	return &Message{
 		MagicByte: magicByte,
@@ -38,8 +48,8 @@ func NewMessage(t Type, payload []byte) *Message {
 	}
 }
 
-// MarshalBinary marshals [Message] in the wire format
-func (msg *Message) MarshalBinary() ([]byte, error) {
+// MarshalWire marshals [Message] in the wire format.
+func (msg *Message) MarshalWire() ([]byte, error) {
 	buf := make([]byte, headerLength+msg.Length)
 
 	binary.LittleEndian.PutUint32(buf, msg.MagicByte)

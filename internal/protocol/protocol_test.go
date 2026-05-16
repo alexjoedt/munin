@@ -21,7 +21,7 @@ func TestMarshalBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := NewMessage(tt.msgType, tt.payload)
 
-			data, err := msg.MarshalBinary()
+			data, err := msg.MarshalWire()
 			if err != nil {
 				t.Fatalf("marshal failed: %v", err)
 			}

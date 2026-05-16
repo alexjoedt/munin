@@ -47,7 +47,7 @@ func TestEventUnmarshalBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			event := &Event{}
-			err := event.UnmarshalBinary(tt.binaryEvent)
+			err := event.UnmarshalWire(tt.binaryEvent)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("UnmarshalBinary(): error = nil; want non-nil")
@@ -108,7 +108,7 @@ func TestEventMarshalBinary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.event.MarshalBinary()
+			got, err := tt.event.MarshalWire()
 
 			if tt.wantErr {
 				if err == nil {
@@ -160,7 +160,7 @@ func TestEventMarshalBinary_WireSegments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.event.MarshalBinary()
+			got, err := tt.event.MarshalWire()
 			if err != nil {
 				t.Fatalf("MarshalBinary() unexpected error = %v", err)
 			}
