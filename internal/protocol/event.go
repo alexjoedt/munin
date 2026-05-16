@@ -32,7 +32,7 @@ func NewEvent(topic string, data []byte) *Event {
 	}
 }
 
-// MarshalBinary marshals [Event] into a binary format
+// MarshalBinary marshals [Event] into a binary format.
 func (e *Event) MarshalBinary() ([]byte, error) {
 	topic := []byte(e.Topic)
 	if len(topic) > math.MaxUint16 {
@@ -67,7 +67,10 @@ func (e *Event) MarshalBinary() ([]byte, error) {
 	offset += 4
 
 	// Write data
-	writeBytes(buf, offset, e.Data)
+	_, err = writeBytes(buf, offset, e.Data)
+	if err != nil {
+		return nil, fmt.Errorf("write data: %w", err)
+	}
 
 	return buf, nil
 }
