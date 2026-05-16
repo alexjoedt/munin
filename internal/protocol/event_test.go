@@ -14,6 +14,7 @@ import (
 
 func TestEventUnmarshalBinary(t *testing.T) {
 	fixedID := xid.ID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C}
+	anotherID := xid.ID{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B}
 
 	tests := []struct {
 		name        string
@@ -26,17 +27,36 @@ func TestEventUnmarshalBinary(t *testing.T) {
 			binaryEvent: eventBinary(fixedID, "users.created", []byte(`{"email": "test@munin.com"}`)),
 			want:        &Event{ID: fixedID, Topic: "users.created", Data: []byte(`{"email": "test@munin.com"}`)},
 		},
+		{
+			name:        "event with empty topic and empty data",
+			binaryEvent: eventBinary(anotherID, "", []byte{}),
+			want:        &Event{ID: anotherID, Topic: "", Data: []byte{}},
+		},
+		{
+			name:        "event with topic and empty data",
+			binaryEvent: eventBinary(anotherID, "users.updated", []byte{}),
+			want:        &Event{ID: anotherID, Topic: "users.updated", Data: []byte{}},
+		},
+		{
+			name:        "event with empty topic and data",
+			binaryEvent: eventBinary(anotherID, "", []byte(`{"ok":true}`)),
+			want:        &Event{ID: anotherID, Topic: "", Data: []byte(`{"ok":true}`)},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			event := &Event{}
 			err := event.UnmarshalBinary(tt.binaryEvent)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("UnmarshalBinary(): error = nil; want non-nil")
 				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("UnmarshalBinary(): error = %v; want nil", err)
 			}
 
 			if !reflect.DeepEqual(tt.want, event) {
@@ -44,7 +64,6 @@ func TestEventUnmarshalBinary(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestEventMarshalBinary(t *testing.T) {
