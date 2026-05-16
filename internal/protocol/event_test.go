@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -12,6 +13,37 @@ import (
 )
 
 func TestEventUnmarshalBinary(t *testing.T) {
+	fixedID := xid.ID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C}
+
+	tests := []struct {
+		name        string
+		binaryEvent []byte
+		want        *Event
+		wantErr     bool
+	}{
+		{
+			name:        "event with topic and data",
+			binaryEvent: eventBinary(fixedID, "users.created", []byte(`{"email": "test@munin.com"}`)),
+			want:        &Event{ID: fixedID, Topic: "users.created", Data: []byte(`{"email": "test@munin.com"}`)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			event := &Event{}
+			err := event.UnmarshalBinary(tt.binaryEvent)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("UnmarshalBinary(): error = nil; want non-nil")
+				}
+			}
+
+			if !reflect.DeepEqual(tt.want, event) {
+				t.Fatalf("want %v, got %v", tt.want, event)
+			}
+		})
+	}
 
 }
 
@@ -32,7 +64,7 @@ func TestEventMarshalBinary(t *testing.T) {
 				Topic: "orders.created",
 				Data:  []byte(`{"order_id":42}`),
 			},
-			want: expectedEventBinary(fixedID, "orders.created", []byte(`{"order_id":42}`)),
+			want: eventBinary(fixedID, "orders.created", []byte(`{"order_id":42}`)),
 		},
 		{
 			name: "marshal event with empty topic and empty data",
@@ -41,7 +73,7 @@ func TestEventMarshalBinary(t *testing.T) {
 				Topic: "",
 				Data:  []byte{},
 			},
-			want: expectedEventBinary(fixedID, "", []byte{}),
+			want: eventBinary(fixedID, "", []byte{}),
 		},
 		{
 			name: "topic exceeding max uint16 returns error",
@@ -152,7 +184,7 @@ func TestEventMarshalBinary_WireSegments(t *testing.T) {
 	}
 }
 
-func expectedEventBinary(id xid.ID, topic string, data []byte) []byte {
+func eventBinary(id xid.ID, topic string, data []byte) []byte {
 	topicBytes := []byte(topic)
 	buf := make([]byte, 12+2+len(topicBytes)+4+len(data))
 	offset := 0
