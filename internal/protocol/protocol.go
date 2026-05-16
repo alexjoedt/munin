@@ -38,6 +38,7 @@ func NewMessage(t Type, payload []byte) *Message {
 	}
 }
 
+// MarshalBinary marshals [Message] in the wire format
 func (msg *Message) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, headerLength+msg.Length)
 
