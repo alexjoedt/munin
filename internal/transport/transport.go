@@ -43,7 +43,7 @@ func NewServer(logger *slog.Logger) *Server {
 // ListenAndServe always returns a non-nil error.
 func (srv *Server) ListenAndServe(ctx context.Context, addr string) error {
 
-	network := networkFromAddr(addr)
+	network := NetworkFromAddr(addr)
 
 	listener, err := net.Listen(network, addr)
 	if err != nil {
@@ -133,11 +133,25 @@ func (srv *Server) closeListener() {
 	})
 }
 
-// networkFromAddr returns "unix" when addr looks like a file-system path
+// NetworkFromAddr returns "unix" when addr looks like a file-system path
 // (starts with "/" or "./"), and "tcp" otherwise.
-func networkFromAddr(addr string) string {
-	if strings.HasPrefix(addr, "/") || strings.HasPrefix(addr, "./") {
+func NetworkFromAddr(addr string) string {
+	if strings.HasPrefix(addr, "/") ||
+		strings.HasPrefix(addr, "./") || strings.HasPrefix(addr, "unix") {
 		return "unix"
 	}
 	return "tcp"
+}
+
+// SplitAddr splits address into network and host:port or path for unix
+func SplitAddr(addr string) (string, string, error) {
+	network := NetworkFromAddr(addr)
+
+	switch network {
+	case "unix":
+		return network, strings.TrimPrefix(addr, "unix://"), nil
+	case "tcp":
+		return network, strings.TrimPrefix(addr, "tcp://"), nil
+	}
+	return "", "", fmt.Errorf("unsupported network: '%s'", network)
 }
