@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestMarshalBinary(t *testing.T) {
+func TestMessageMarshalWire(t *testing.T) {
 	tests := []struct {
 		name    string
 		msgType Type
