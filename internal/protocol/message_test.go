@@ -102,3 +102,33 @@ func TestMessageUnmarshalWire(t *testing.T) {
 		})
 	}
 }
+
+func TestMessageMarshalWireErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  *Message
+	}{
+		{
+			name: "nil message",
+			msg:  nil,
+		},
+		{
+			name: "length mismatch",
+			msg: &Message{
+				MagicByte: magicByte,
+				Version:   version,
+				Type:      uint8(TypePublish),
+				Length:    10,
+				Payload:   []byte("abc"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.msg.MarshalWire(); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}

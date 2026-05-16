@@ -1,6 +1,11 @@
 package protocol
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"math"
+)
 
 type Message struct {
 	MagicByte uint32 // 4 Byte
@@ -34,12 +39,25 @@ func NewMessage(t Type, payload []byte) *Message {
 
 // MarshalWire marshals [Message] in the wire format.
 func (msg *Message) MarshalWire() ([]byte, error) {
-	buf := make([]byte, headerLength+msg.Length)
+	if msg == nil {
+		return nil, errors.New("message is nil")
+	}
+
+	payloadLen := len(msg.Payload)
+	if payloadLen > math.MaxUint32 {
+		return nil, fmt.Errorf("payload too large: %d bytes", payloadLen)
+	}
+
+	if msg.Length != uint32(payloadLen) {
+		return nil, fmt.Errorf("message length mismatch: header=%d payload=%d", msg.Length, payloadLen)
+	}
+
+	buf := make([]byte, headerLength+payloadLen)
 
 	binary.LittleEndian.PutUint32(buf, msg.MagicByte)
 	buf[4] = msg.Version
 	buf[5] = msg.Type
-	binary.BigEndian.PutUint32(buf[6:10], msg.Length)
+	binary.BigEndian.PutUint32(buf[6:10], uint32(payloadLen))
 	copy(buf[10:], msg.Payload)
 
 	return buf, nil
