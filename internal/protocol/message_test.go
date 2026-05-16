@@ -6,6 +6,112 @@ import (
 	"testing"
 )
 
+func TestHeaderMarshalWire(t *testing.T) {
+	tests := []struct {
+		name string
+		h    *Header
+		want []byte
+		ok   bool
+	}{
+		{
+			name: "marshal header",
+			h: &Header{
+				MagicByte: magicByte,
+				Version:   version,
+				Type:      uint8(TypePublish),
+				Length:    3,
+			},
+			want: []byte{0x39, 0x05, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x03},
+			ok:   true,
+		},
+		{
+			name: "nil header",
+			h:    nil,
+			ok:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.h.MarshalWire()
+			if !tt.ok {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("marshal failed: %v", err)
+			}
+
+			if !bytes.Equal(got, tt.want) {
+				t.Fatalf("unexpected bytes: got=%v want=%v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHeaderUnmarshalWire(t *testing.T) {
+	tests := []struct {
+		name string
+		h    *Header
+		in   []byte
+		ok   bool
+	}{
+		{
+			name: "unmarshal header",
+			h:    &Header{},
+			in:   []byte{0x39, 0x05, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x03},
+			ok:   true,
+		},
+		{
+			name: "nil header",
+			h:    nil,
+			in:   []byte{0x39, 0x05, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x03},
+			ok:   false,
+		},
+		{
+			name: "short buffer",
+			h:    &Header{},
+			in:   []byte{0x39, 0x05, 0x00},
+			ok:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.h.UnmarshalWire(tt.in)
+			if !tt.ok {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unmarshal failed: %v", err)
+			}
+
+			if tt.h.MagicByte != magicByte {
+				t.Fatalf("magic byte: expected %d, got %d", magicByte, tt.h.MagicByte)
+			}
+
+			if tt.h.Version != version {
+				t.Fatalf("version: expected %d, got %d", version, tt.h.Version)
+			}
+
+			if tt.h.Type != uint8(TypePublish) {
+				t.Fatalf("type: expected %d, got %d", TypePublish, tt.h.Type)
+			}
+
+			if tt.h.Length != 3 {
+				t.Fatalf("length: expected %d, got %d", 3, tt.h.Length)
+			}
+		})
+	}
+}
+
 func TestMessageMarshalWire(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -70,14 +176,15 @@ func TestMessageUnmarshalWire(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wire, err := NewMessage(tt.msgType, tt.payload).MarshalWire()
-			if err != nil {
-				t.Fatalf("marshal failed: %v", err)
+			wire, marshalErr := NewMessage(tt.msgType, tt.payload).MarshalWire()
+			if marshalErr != nil {
+				t.Fatalf("marshal failed: %v", marshalErr)
 			}
 
 			var got Message
-			if err := got.UnmarshalWire(wire); err != nil {
-				t.Fatalf("unmarshal failed: %v", err)
+			unmarshalErr := got.UnmarshalWire(wire)
+			if unmarshalErr != nil {
+				t.Fatalf("unmarshal failed: %v", unmarshalErr)
 			}
 
 			if got.MagicByte != magicByte {
@@ -115,11 +222,19 @@ func TestMessageMarshalWireErrors(t *testing.T) {
 		{
 			name: "length mismatch",
 			msg: &Message{
-				MagicByte: magicByte,
-				Version:   version,
-				Type:      uint8(TypePublish),
-				Length:    10,
-				Payload:   []byte("abc"),
+				Header: &Header{
+					MagicByte: magicByte,
+					Version:   version,
+					Type:      uint8(TypePublish),
+					Length:    10,
+				},
+				Payload: []byte("abc"),
+			},
+		},
+		{
+			name: "nil message header",
+			msg: &Message{
+				Payload: []byte("abc"),
 			},
 		},
 	}
@@ -127,6 +242,38 @@ func TestMessageMarshalWireErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := tt.msg.MarshalWire(); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestMessageUnmarshalWireErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  *Message
+		in   []byte
+	}{
+		{
+			name: "nil message",
+			msg:  nil,
+			in:   []byte{0x39, 0x05, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x03},
+		},
+		{
+			name: "short header",
+			msg:  &Message{},
+			in:   []byte{0x39, 0x05},
+		},
+		{
+			name: "short payload",
+			msg:  &Message{},
+			in:   []byte{0x39, 0x05, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x04, 0x41},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.msg.UnmarshalWire(tt.in); err == nil {
 				t.Fatal("expected error")
 			}
 		})
