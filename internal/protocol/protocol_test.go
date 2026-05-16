@@ -2,53 +2,57 @@ package protocol
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
-func TestMarhsalBinary(t *testing.T) {
-	buf := []byte(`{"message": "hello munin"}`)
-	msg := &Message{
-		MagicByte: magicByte,
-		Version:   version,
-		Type:      uint8(TypeHandshake),
-		Length:    uint32(len(buf)),
-		Payload:   buf,
+func TestMarshalBinary(t *testing.T) {
+	tests := []struct {
+		name    string
+		msgType Type
+		payload []byte
+	}{
+		{"handshake", TypeHandshake, []byte(`{"message": "hello munin"}`)},
+		{"heartbeat", TypeHeartbeat, []byte{}},
+		{"publish", TypePublish, []byte(`{"topic":"t","data":"x"}`)},
 	}
 
-	data, err := msg.MarshalBinary()
-	if err != nil {
-		t.Errorf("marshal failed: %v", err)
-		t.FailNow()
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := NewMessage(tt.msgType, tt.payload)
 
-	expectedLen := headerLength + len(msg.Payload)
-	if len(data) != expectedLen {
-		t.Errorf("expected length %d, got %d", expectedLen, len(data))
-		t.FailNow()
-	}
+			data, err := msg.MarshalBinary()
+			if err != nil {
+				t.Fatalf("marshal failed: %v", err)
+			}
 
-	if !bytes.Equal(data[:4], []byte{57, 5, 0, 0}) {
-		t.Errorf("exptected '%s', got %s", []byte{57, 5, 0, 0}, data[:3])
-		t.FailNow()
-	}
+			if len(data) != headerLength+len(tt.payload) {
+				t.Fatalf("expected length %d, got %d", headerLength+len(tt.payload), len(data))
+			}
 
-	if data[4] != version {
-		t.Errorf("expected %d, got %d", version, data[4])
-		t.FailNow()
-	}
+			var expectedMagic [4]byte
+			binary.LittleEndian.PutUint32(expectedMagic[:], magicByte)
+			if !bytes.Equal(data[:4], expectedMagic[:]) {
+				t.Errorf("magic bytes: expected %v, got %v", expectedMagic[:], data[:4])
+			}
 
-	if data[5] != byte(TypeHandshake) {
-		t.Errorf("expected %d, got %d", TypeHeartbeat, data[5])
-		t.FailNow()
-	}
+			if data[4] != version {
+				t.Errorf("version: expected %d, got %d", version, data[4])
+			}
 
-	if !bytes.Equal(data[6:10], []byte{0, 0, 0, 26}) {
-		t.Errorf("expected []byte{0, 0, 0, 26}, got %b", data[6:10])
-		t.FailNow()
-	}
+			if data[5] != byte(tt.msgType) {
+				t.Errorf("type: expected %d, got %d", tt.msgType, data[5])
+			}
 
-	if !bytes.Equal(data[10:], buf) {
-		t.Errorf("expteted %s, got %s", string(buf), string(data[10:]))
-		t.FailNow()
+			var expectedLen [4]byte
+			binary.BigEndian.PutUint32(expectedLen[:], uint32(len(tt.payload)))
+			if !bytes.Equal(data[6:10], expectedLen[:]) {
+				t.Errorf("length bytes: expected %v, got %v", expectedLen[:], data[6:10])
+			}
+
+			if !bytes.Equal(data[10:], tt.payload) {
+				t.Errorf("payload: expected %s, got %s", tt.payload, data[10:])
+			}
+		})
 	}
 }
